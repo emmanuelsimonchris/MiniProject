@@ -1,0 +1,80 @@
+import nltk
+import numpy as np
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import LabelEncoder
+from tensorflow import keras
+
+nltk.download('punkt')
+nltk.download('wordnet')
+
+lemmatizer = WordNetLemmatizer()
+
+# Training Data
+intents = {
+    'greeting': ['hello', 'hi', 'hey', 'howdy'],
+    'goodbye': ['bye', 'goodbye', 'see you'],
+    'thanks': ['thank you', 'thanks a lot', 'thanks'],
+    'appointment': ['book an appointment', 'schedule a visit', 'appointment'],
+}
+
+corpus = []
+labels = []
+for intent, sentences in intents.items():
+    for sentence in sentences:
+        tokens = word_tokenize(sentence)
+        lemmatized_tokens = [lemmatizer.lemmatize(token) for token in tokens]
+        corpus.append(' '.join(lemmatized_tokens))
+        labels.append(intent)
+
+# Vectorize training data
+vectorizer = TfidfVectorizer()
+X = vectorizer.fit_transform(corpus)
+y = np.array(labels)
+
+# Encode labels
+label_encoder = LabelEncoder()
+y = label_encoder.fit_transform(y)
+
+# Define neural network architecture
+model = keras.Sequential([
+    keras.layers.Dense(64, activation='relu', input_shape=(X.shape[1],)),
+    keras.layers.Dropout(0.5),
+    keras.layers.Dense(32, activation='relu'),
+    keras.layers.Dropout(0.5),
+    keras.layers.Dense(len(intents), activation='softmax')
+])
+
+# Compile the model
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+# Train the model
+model.fit(X.toarray(), y, epochs=10, batch_size=8)
+
+# Function to predict intent of user query with lemmatization
+def predict_intent(query):
+    tokens = word_tokenize(query)
+    lemmatized_tokens = [lemmatizer.lemmatize(token) for token in tokens]
+    query_vector = vectorizer.transform([' '.join(lemmatized_tokens)])
+    predicted_class = model.predict_classes(query_vector.toarray())[0]
+    predicted_intent = label_encoder.inverse_transform([predicted_class])[0]
+    return predicted_intent
+
+# Example usage
+user_query = input("User: ")
+
+while user_query.lower() != "exit":
+    predicted_intent = predict_intent(user_query)
+    print("ChatBot: Intent:", predicted_intent)
+
+    if predicted_intent == 'greeting':
+        print("ChatBot: Hello! How can I assist you?")
+    elif predicted_intent == 'goodbye':
+        print("ChatBot: Goodbye! Have a nice day!")
+    elif predicted_intent == 'thanks':
+        print("ChatBot: You're welcome!")
+    elif predicted_intent == 'appointment':
+        print("ChatBot: Sure, I can help you book an appointment. Please provide some details.")
+
+    user_query = input("User: ")
